@@ -1,0 +1,18 @@
+[project]
+name = "sprintpilot"
+version = "0.1.0"
+description = "Provider-agnostic Agile SDLC planning platform foundation."
+requires-python = ">=3.12"
+dependencies = [
+    "google-genai>=1.0",
+    "pydantic>=2.0",
+    "rich>=13.0",
+    "typer>=0.12",
+]
+
+[project.scripts]
+sprintpilot = "sprintpilot.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
