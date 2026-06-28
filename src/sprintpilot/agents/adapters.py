@@ -8,7 +8,12 @@ from pydantic import ValidationError
 
 from sprintpilot.domain import ArchitecturePlan, ProductDefinition, SprintPlan
 from sprintpilot.llm import StructuredGenerationResult
-from sprintpilot.validation.scope import detect_architecture_forbidden_scope, detect_forbidden_scope
+from sprintpilot.validation.scope import (
+    ForbiddenScopeFinding,
+    detect_architecture_forbidden_scope,
+    detect_forbidden_scope,
+    detect_forbidden_scope_in_value,
+)
 
 T = TypeVar("T")
 
@@ -43,10 +48,12 @@ def parse_product_definition_result(
     except ValidationError as exc:
         return ParsedArtifact(None, [str(error["msg"]) for error in exc.errors()])
 
-    findings = detect_forbidden_scope(definition.model_dump_json())
+    findings = detect_forbidden_scope_in_value(definition.model_dump(mode="json"))
     if findings:
-        labels = ", ".join(finding.label for finding in findings)
-        return ParsedArtifact(None, [f"Product definition includes out-of-scope content: {labels}"])
+        return ParsedArtifact(
+            definition,
+            [_format_forbidden_scope_error("Product definition", findings)],
+        )
 
     return ParsedArtifact(definition)
 
@@ -70,6 +77,20 @@ def parse_architecture_plan_result(
         return ParsedArtifact(None, [f"Architecture plan includes out-of-scope content: {labels}"])
 
     return ParsedArtifact(plan)
+
+
+def _format_forbidden_scope_error(
+    artifact_label: str,
+    findings: list[ForbiddenScopeFinding],
+) -> str:
+    labels = ", ".join(finding.label for finding in findings)
+    match_details = "; ".join(_format_finding_detail(finding) for finding in findings)
+    return f"{artifact_label} includes out-of-scope content: {labels}; {match_details}"
+
+
+def _format_finding_detail(finding: ForbiddenScopeFinding) -> str:
+    location = f" in field {finding.field_path}" if finding.field_path else ""
+    return f"{finding.label} matched text {finding.matched_text!r}{location}"
 
 
 def parse_sprint_plan_result(

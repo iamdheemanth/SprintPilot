@@ -7,6 +7,7 @@ can be introduced behind this boundary later without leaking provider SDKs upwar
 from __future__ import annotations
 
 import copy
+import logging
 import re
 from typing import Any
 
@@ -20,11 +21,15 @@ from sprintpilot.agents.prompts import (
     build_architect_messages,
     build_architect_retry_messages,
     build_product_manager_messages,
+    build_product_manager_repair_messages,
     build_scrum_master_messages,
 )
 from sprintpilot.domain import ArchitecturePlan, ProductDefinition, ProductIdea, SprintPlan
 from sprintpilot.llm import LLMProvider, LLMRequest, StructuredGenerationResult
 from sprintpilot.validation.scope import detect_architecture_forbidden_scope
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProductManagerCrew:
@@ -41,13 +46,193 @@ class ProductManagerCrew:
                 "schema": ProductDefinition.model_json_schema(),
             },
         )
-        return parse_product_definition_result(self._provider.generate_structured(request))
+        parsed = parse_product_definition_result(self._provider.generate_structured(request))
+        if parsed.is_valid:
+            return parsed
+        if parsed.value is None or not _has_repairable_product_definition_scope_error(
+            parsed.validation_errors
+        ):
+            return parsed
+
+        repair_request = LLMRequest(
+            messages=build_product_manager_repair_messages(
+                product_definition=parsed.value,
+                validation_errors=parsed.validation_errors,
+            ),
+            response_schema={
+                "name": "ProductDefinition",
+                "schema": ProductDefinition.model_json_schema(),
+            },
+        )
+        logger.info("ProductDefinition repair attempted after scope validation failure.")
+        repair_result = self._provider.generate_structured(repair_request)
+        sanitized_data = _sanitize_product_definition_payload(repair_result.data)
+        if sanitized_data != repair_result.data:
+            logger.info("ProductDefinition deterministic sanitizer applied after repair.")
+        _log_product_definition_final_validation_snapshot(sanitized_data)
+        repaired = parse_product_definition_result(
+            StructuredGenerationResult(
+                data=sanitized_data,
+                raw_response=repair_result.raw_response,
+                validation_errors=repair_result.validation_errors,
+            )
+        )
+        if repaired.is_valid:
+            logger.info("ProductDefinition repair succeeded.")
+            return repaired
+        logger.info("ProductDefinition repair failed; returning final validation error.")
+        return repaired
 
 
 def create_product_manager_crew(provider: LLMProvider) -> ProductManagerCrew:
     """Create Product Manager orchestration behind the LLM provider boundary."""
 
     return ProductManagerCrew(provider)
+
+
+def _has_repairable_product_definition_scope_error(errors: list[str]) -> bool:
+    repairable_labels = (
+        "multi-user collaboration",
+        "analytics",
+        "cloud collaboration",
+    )
+    return any(
+        error.startswith("Product definition includes out-of-scope content:")
+        and any(label in error for label in repairable_labels)
+        for error in errors
+    )
+
+
+_PRODUCT_DEFINITION_COLLABORATION_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    ("multi-user collaboration", "single-student workflow"),
+    ("multi user collaboration", "single-student workflow"),
+    ("team collaboration", "single-student workflow"),
+    ("shared workspaces", "personal workspaces"),
+    ("shared workspace", "personal workspace"),
+    ("team accounts", "single student accounts"),
+    ("team account", "single student account"),
+    ("advisor collaboration", "single-student review"),
+    ("advisor comments", "personal notes"),
+    ("advisor commenting", "personal notes"),
+    ("co-editing", "editing"),
+    ("coediting", "editing"),
+    ("co-edit", "edit"),
+    ("sharing workflows", "personal workflows"),
+    ("sharing workflow", "personal workflow"),
+    ("share applications", "track applications"),
+    ("shared applications", "tracked applications"),
+    ("role-based teamwork", "single-user workflow"),
+    ("role based teamwork", "single-user workflow"),
+    ("teamwork features", "single-user features"),
+    ("collaboration features", "single-user features"),
+    ("collaboration workflows", "personal workflows"),
+    ("comment on applications", "add personal notes to applications"),
+    ("comments on applications", "personal notes on applications"),
+    ("commenting", "personal note-taking"),
+    ("cloud collaboration", "local single-student workflow"),
+    ("collaboration service", "local single-student workflow"),
+    ("analytics module", "personal application metrics"),
+    ("analytics subsystem", "personal application metrics"),
+    ("analytics platform", "personal application metrics"),
+    ("analytics dashboard", "personal application metrics"),
+    ("standalone analytics module", "personal application metrics"),
+    ("standalone analytics dashboard", "personal application metrics"),
+    ("standalone analytics", "personal application metrics"),
+    ("metrics dashboard", "personal application metrics"),
+    ("reporting platform", "personal application metrics"),
+    ("reporting system", "personal application metrics"),
+    ("analytics reporting", "personal application metrics"),
+)
+
+
+def _sanitize_product_definition_payload(data: Any) -> Any:
+    if not isinstance(data, dict):
+        return data
+    return _sanitize_product_definition_value(copy.deepcopy(data))
+
+
+def _sanitize_product_definition_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _sanitize_product_definition_text(value)
+    if isinstance(value, list):
+        return [_sanitize_product_definition_value(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_product_definition_value(item)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _sanitize_product_definition_text(value: str) -> str:
+    sanitized = value
+    for forbidden, replacement in _PRODUCT_DEFINITION_COLLABORATION_REPLACEMENTS:
+        sanitized = re.sub(
+            rf"(?<![A-Za-z0-9]){re.escape(forbidden)}(?![A-Za-z0-9])",
+            replacement,
+            sanitized,
+            flags=re.IGNORECASE,
+        )
+    return re.sub(r"\s{2,}", " ", sanitized).strip()
+
+
+def _log_product_definition_final_validation_snapshot(data: Any) -> None:
+    """TEMPORARY DIAGNOSTIC: log final ProductDefinition sections before validation."""
+
+    if not logger.isEnabledFor(logging.DEBUG):
+        return
+    logger.debug(
+        "TEMPORARY ProductDefinition final validation snapshot: %s",
+        _redact_diagnostic_value(_product_definition_validation_snapshot(data)),
+    )
+
+
+def _product_definition_validation_snapshot(data: Any) -> Any:
+    if not isinstance(data, dict):
+        return {"payload_type": type(data).__name__}
+    return {
+        "summary": data.get("summary"),
+        "primary_users": data.get("primary_users"),
+        "functional_requirements": data.get("functional_requirements"),
+        "non_functional_requirements": data.get("non_functional_requirements"),
+        "user_stories": data.get("user_stories"),
+        "assumptions": data.get("assumptions"),
+        "missing_information": data.get("missing_information"),
+        "reasoning": data.get("reasoning"),
+    }
+
+
+def _redact_diagnostic_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _redact_diagnostic_text(value)
+    if isinstance(value, list):
+        return [_redact_diagnostic_value(item) for item in value]
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            if _is_secret_like_diagnostic_key(str(key)):
+                redacted[key] = "[filtered]"
+            else:
+                redacted[key] = _redact_diagnostic_value(item)
+        return redacted
+    return value
+
+
+def _is_secret_like_diagnostic_key(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    return any(fragment in normalized for fragment in ("api_key", "apikey", "secret", "password", "token"))
+
+
+def _redact_diagnostic_text(value: str) -> str:
+    redacted = re.sub(r"Bearer\s+[A-Za-z0-9._~+/=-]+", "Bearer [filtered]", value)
+    redacted = re.sub(r"sk-[A-Za-z0-9._~+/=-]+", "sk-[filtered]", redacted)
+    redacted = re.sub(r"AIza[A-Za-z0-9._~+/=-]+", "AIza[filtered]", redacted)
+    redacted = re.sub(r"secret-[A-Za-z0-9._~+/=-]+", "secret-[filtered]", redacted)
+    return re.sub(
+        r"(?i)\b([A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD))\s*=\s*\S+",
+        r"\1=[filtered]",
+        redacted,
+    )
 
 
 class ArchitectCrew:

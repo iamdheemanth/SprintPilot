@@ -40,3 +40,28 @@ def test_argparse_entrypoint_supports_plan_subcommand_for_dry_run(capsys) -> Non
     captured = capsys.readouterr()
     assert exit_code == PLAN_EXIT_OK
     assert "validated" in captured.out.lower()
+
+
+def test_argparse_entrypoint_supports_taiga_export_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
+    from tests.unit.fixtures.test_taiga_sprint_plan import make_taiga_sprint_plan
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SPRINTPILOT_CONFIG_HOME", str(tmp_path / "config"))
+    sprint_plan_file = tmp_path / "sprint-plan.json"
+    sprint_plan_file.write_text(make_taiga_sprint_plan().model_dump_json(), encoding="utf-8")
+    monkeypatch.setenv("SPRINTPILOT_MODEL_PROVIDER", "stub")
+    monkeypatch.setenv("SPRINTPILOT_MODEL_NAME", "stub-model")
+    monkeypatch.setenv("SPRINTPILOT_TAIGA_BASE_URL", "https://taiga.example.com")
+    monkeypatch.setenv("SPRINTPILOT_TAIGA_PROJECT", "project-slug")
+    monkeypatch.setenv("SPRINTPILOT_TAIGA_AUTH_MODE", "bearer")
+    monkeypatch.setenv("SPRINTPILOT_TAIGA_TOKEN_ENV_KEY", "SPRINTPILOT_TAIGA_TOKEN")
+    monkeypatch.setenv("SPRINTPILOT_TAIGA_TOKEN", "secret-taiga-token")
+
+    exit_code = main(["taiga-export", "--sprint-plan-file", str(sprint_plan_file), "--dry-run"])
+
+    captured = capsys.readouterr()
+    assert exit_code == PLAN_EXIT_OK
+    assert "Taiga project: project-slug" in captured.out
+    assert "Mode: dry-run" in captured.out
+    assert "Previewed: 4" in captured.out
+    assert "secret-taiga-token" not in captured.out

@@ -33,6 +33,46 @@ def test_allows_target_product_application_analytics() -> None:
     )
 
 
+def test_allows_students_and_users_without_collaboration_features() -> None:
+    text = (
+        "Students can track applications, interview stages, offers, deadlines, "
+        "recruiter contacts and their own application analytics."
+    )
+
+    assert has_forbidden_scope(text) is False
+
+
+def test_allows_personal_student_application_metrics() -> None:
+    text = (
+        "The individual student can see total applications, applications by status, "
+        "interview and offer counts, and an upcoming deadline summary for their own applications."
+    )
+
+    assert has_forbidden_scope(text) is False
+
+
+def test_rejects_product_collaboration_features_precisely() -> None:
+    findings = detect_forbidden_scope(
+        "Students can invite advisors into shared workspaces, comment on applications, "
+        "co-edit notes and manage team accounts with role-based teamwork features."
+    )
+
+    labels = {finding.label for finding in findings}
+
+    assert labels == {"multi-user collaboration"}
+
+
+def test_rejects_analytics_when_it_becomes_a_standalone_subsystem() -> None:
+    findings = detect_forbidden_scope(
+        "The product includes a separate analytics module, analytics dashboard, "
+        "reporting platform and reporting system."
+    )
+
+    labels = {finding.label for finding in findings}
+
+    assert labels == {"analytics"}
+
+
 def test_architecture_scope_rejects_application_analytics_when_generated_in_architecture_plan() -> None:
     findings = detect_architecture_forbidden_scope(
         "The Backend API performs application analytics and displays conversion metrics."

@@ -1,11 +1,25 @@
 # SprintPilot
 
-SprintPilot is an AI-powered Agile SDLC planning tool that turns a product idea into implementation-ready engineering artifacts.
+SprintPilot is an AI-powered Agile SDLC platform that transforms product ideas into structured engineering artifacts and exports accepted sprint planning output into a Taiga backlog.
 
-Core v1 is a local, CLI-first release focused on one practical workflow:
+The current release combines the Core Planning Engine from v1.0 with the Taiga Backlog Export release from v2.0:
 
 ```text
-Product Idea -> Product Definition -> Architecture Plan -> Sprint Plan -> Engineering Confidence Assessment -> Markdown Report
+Idea
+↓
+Product Definition
+↓
+Architecture Plan
+↓
+Sprint Plan
+↓
+Engineering Confidence Score
+↓
+Markdown Report
+↓
+SprintPlan JSON
+↓
+Taiga Backlog
 ```
 
 It is designed for engineers, student developers, founders and small teams who need to reduce ambiguity before writing code. SprintPilot is not a chatbot, project management clone, autonomous coding agent or ticket tracker replacement.
@@ -14,34 +28,41 @@ It is designed for engineers, student developers, founders and small teams who n
 
 Most early software projects fail slowly: requirements are fuzzy, architecture decisions are implicit, sprint scope is guessed and risks are discovered after development starts. SprintPilot moves those conversations earlier by producing reviewable planning artifacts with reasoning, assumptions, missing information and readiness recommendations.
 
-For recruiters and reviewers, Core v1 demonstrates a complete product-minded engineering slice: domain modeling, provider abstraction, workflow orchestration, deterministic scoring, CLI ergonomics, Markdown report generation and broad automated test coverage.
+For recruiters and reviewers, SprintPilot demonstrates a complete product-minded engineering slice: domain modeling, provider abstraction, workflow orchestration, deterministic scoring, CLI ergonomics, Markdown report generation, structured artifact generation, external integration boundaries and broad automated test coverage.
 
-## Core v1 Highlights
+## Current Release Highlights
 
-- Provider-agnostic LLM interface with Gemini and OpenRouter implementations.
-- End-to-end planning workflow from product idea to local Markdown report.
-- Structured domain models for product, architecture, sprint planning, confidence scoring and reports.
-- Deterministic Engineering Confidence Score with factor-level reasoning.
-- Human-reviewable assumptions, risks, missing information and recommendations.
-- CLI-first local workflow with dry-run and provider diagnostics commands.
-- Scope boundaries that keep Core v1 focused on planning, not code generation or external integrations.
-- 120+ automated tests covering domain logic, provider contracts, workflow behavior, scoring, reporting and CLI paths.
+- Product Definition
+- Architecture Planning
+- Sprint Planning
+- Engineering Confidence Score with factor-level reasoning
+- Markdown report generation
+- Structured SprintPlan JSON generation
+- Taiga backlog export for epics, user stories and tasks
+- Dry-run export before live Taiga writes
+- Live export after human review
+- Profile-based Taiga configuration with secrets kept outside source control
+- Provider-agnostic LLM architecture
+- Gemini integration
+- CLI-first local workflow
+- 189+ automated tests covering domain logic, provider contracts, workflow behavior, scoring, reporting, CLI paths and Taiga integration behavior
 
-## Core v1 Workflow
+## Core Workflow
 
 1. **Product Definition**: Converts an idea into a product summary, users, requirements, user stories, acceptance criteria, assumptions, risks and missing information.
 2. **Architecture Planning**: Produces advisory architecture guidance, stack categories, components, persistence considerations, tradeoffs, assumptions and open questions.
 3. **Sprint Planning**: Builds Agile planning artifacts: epics, sprint-ready stories, task breakdowns, dependencies, story point estimates and estimate reasoning.
 4. **Engineering Confidence Assessment**: Scores implementation readiness across requirement clarity, architecture completeness, dependency readiness, acceptance criteria quality, technical ambiguity and delivery risk.
-5. **Markdown Report**: Writes the full planning package to a local report for review and handoff.
+5. **Markdown Report + SprintPlan Artifact**: Writes the full planning package to a local Markdown report and saves the structured SprintPlan JSON used by integrations.
+6. **Taiga Backlog Export**: Converts the SprintPlan JSON artifact into Taiga epics, user stories and tasks for backlog review.
 
 ## Architecture Overview
 
-SprintPilot Core v1 is organized as a modular Python CLI application. Domain logic, workflow orchestration, provider access, scoring, validation and reporting are kept behind explicit package boundaries.
+SprintPilot is organized as a modular Python CLI application. Domain logic, workflow orchestration, provider access, scoring, validation, reporting and integrations are kept behind explicit package boundaries.
 
 ```mermaid
 flowchart TD
-    CLI["CLI<br/>sprintpilot plan"] --> Workflow["Workflow Orchestration<br/>Core v1 stage runner"]
+    CLI["CLI<br/>sprintpilot"] --> Workflow["Workflow Orchestration<br/>Planning stage runner"]
     Workflow --> Domain["Domain Models<br/>Product, architecture, sprint, report"]
     Workflow --> Agents["Agent Adapters<br/>Product Manager, Architect, Scrum Master"]
     Agents --> LLM["LLM Provider Abstraction<br/>LLMProvider, request/response contracts"]
@@ -51,7 +72,10 @@ flowchart TD
     Domain --> Scoring
     Workflow --> Reporting["Report Generation<br/>Markdown assembler"]
     Scoring --> Reporting
-    Reporting --> Output["Output Report<br/>Local Markdown file"]
+    Reporting --> Report["Markdown Report<br/>Human review artifact"]
+    Reporting --> SprintJSON["SprintPlan JSON<br/>Structured integration artifact"]
+    SprintJSON --> Taiga["Taiga Integration Layer<br/>Mapper, client, auth, sync"]
+    Taiga --> Backlog["Taiga Backlog<br/>Epics, user stories, tasks"]
 ```
 
 Diagram source: [docs/images/core-v1-architecture.mmd](docs/images/core-v1-architecture.mmd)
@@ -64,9 +88,11 @@ SprintPilot code outside `sprintpilot.llm` depends on provider-neutral contracts
 - `LLMRequest`: provider-independent messages, model override, temperature, max tokens and response schema.
 - `LLMResponse`: normalized content, model name, finish reason, token usage and metadata.
 - `StructuredGenerationResult`: parsed JSON data plus validation errors.
-- Provider factory: resolves the single configured Core v1 provider from runtime settings.
+- Provider factory: resolves the configured provider from runtime settings.
 
-This keeps workflow, scoring, validation, reporting and domain logic independent from provider SDKs. Gemini-specific behavior lives in `src/sprintpilot/llm/providers/gemini.py`.
+This keeps workflow, scoring, validation, reporting, integrations and domain logic independent from provider SDKs. Gemini-specific behavior lives in `src/sprintpilot/llm/providers/gemini.py`.
+
+The Taiga integration is isolated under `src/sprintpilot/integrations/taiga/` so backlog export does not leak into LLM providers, scoring, report assembly or Core Planning Engine behavior.
 
 ## Installation
 
@@ -92,10 +118,22 @@ GEMINI_API_KEY=your_api_key_here
 
 ## Run The CLI
 
+Generate planning artifacts:
+
+```bash
+sprintpilot --idea "Build a student internship tracking platform"
+```
+
+You can also use the explicit `plan` subcommand:
+
+```bash
+sprintpilot plan --idea "Build a student internship tracking platform"
+```
+
 Validate inputs without calling a provider:
 
 ```bash
-sprintpilot plan --idea "Build a student internship tracking platform" --dry-run
+sprintpilot --idea "Build a student internship tracking platform" --dry-run
 ```
 
 Check provider configuration and structured-output support:
@@ -104,20 +142,77 @@ Check provider configuration and structured-output support:
 sprintpilot --diagnostics --verbose
 ```
 
-Generate a Markdown report:
+Generate artifacts into the `reports/` directory:
 
 ```bash
-sprintpilot plan ^
-  --idea "Build a student internship tracking platform that tracks applications, interviews, offers, deadlines and recruiter contacts." ^
-  --output reports ^
-  --title "Student Internship Tracking Platform"
+sprintpilot --idea "Build a student internship tracking platform that tracks applications, interviews, offers, deadlines and recruiter contacts." --output reports --title "Student Internship Tracking Platform"
 ```
+
+The normal planning run writes two files to the report output location:
+
+- `student-internship-tracking-platform.md`: the human-reviewable Markdown report.
+- `student-internship-tracking-platform.sprint-plan.json`: the structured SprintPlan artifact that can be passed directly to Taiga export.
+
+When `--output` is a specific Markdown file, the SprintPlan artifact uses the same stem beside it. For example, `reports/internship-report.md` produces `reports/internship-report.sprint-plan.json`.
 
 You can also provide an idea file:
 
 ```bash
-sprintpilot plan --idea-file examples\idea.txt --output reports
+sprintpilot --idea-file examples\idea.txt --output reports
 ```
+
+## Export To Taiga Backlog
+
+SprintPilot v2.0 exports the structured SprintPlan JSON artifact to Taiga backlog epics, user stories and tasks. It does not assign sprints, milestones, capacity, velocity or multi-sprint schedules.
+
+Use `taiga-connect` once to configure the Taiga profile:
+
+```bash
+sprintpilot taiga-connect \
+  --profile acme \
+  --base-url https://taiga.example.com \
+  --project my-project \
+  --auth-mode bearer \
+  --token-env-key SPRINTPILOT_TAIGA_TOKEN \
+  --default
+```
+
+Profiles store non-secret connection data under the user config directory:
+
+- Windows: `%APPDATA%\SprintPilot\taiga-profiles.json`
+- macOS/Linux: `$XDG_CONFIG_HOME/sprintpilot/taiga-profiles.json` or `~/.config/sprintpilot/taiga-profiles.json`
+
+The current repo stores only its active profile name in `.sprintpilot/taiga.json`. Token values are not written to either file. Put the token in your shell, OS keyring or an untracked local `.env`:
+
+```bash
+SPRINTPILOT_TAIGA_TOKEN=your_taiga_token_here
+```
+
+Preview the backlog export without creating items:
+
+```bash
+sprintpilot taiga-export --sprint-plan-file reports/<artifact>.sprint-plan.json --dry-run
+```
+
+Create Taiga backlog items after reviewing the preview:
+
+```bash
+sprintpilot taiga-export --sprint-plan-file reports/<artifact>.sprint-plan.json --live
+```
+
+Legacy `SPRINTPILOT_TAIGA_BASE_URL`, `SPRINTPILOT_TAIGA_PROJECT`, `SPRINTPILOT_TAIGA_AUTH_MODE` and `SPRINTPILOT_TAIGA_TOKEN_ENV_KEY` values still work as a fallback, but `.env` is intended for secrets rather than routine Taiga target selection.
+
+## GitHub Hygiene
+
+The repository intentionally keeps generated and local-only files out of source control:
+
+- `.env` and `.env.*` for local credentials and API keys.
+- `.venv/`, build outputs, caches and test coverage artifacts.
+- `reports/` for generated Markdown reports and SprintPlan JSON artifacts.
+- `.sprintpilot/` for repo-local Taiga profile bindings.
+- local agent and Spec Kit memory files under `.agents/` and `.specify/memory/`.
+
+Keep `.env.example`, `README.md`, source code, tests, docs and active `specs/` artifacts reviewable in Git.
 
 ## Run Tests
 
@@ -132,11 +227,17 @@ pytest tests/unit
 pytest tests/integration
 ```
 
-Automated tests use mocked provider behavior where needed and should not require live LLM credentials.
+Automated tests use mocked provider and Taiga behavior where needed. They should not require live LLM credentials or live Taiga credentials.
 
 ## Sample Output
 
-SprintPilot reports are Markdown files intended for human review before implementation.
+SprintPilot outputs are intended for human review before implementation.
+
+Current outputs include:
+
+- Markdown planning report
+- Structured SprintPlan JSON artifact
+- Taiga backlog items for epics, user stories and tasks
 
 Example excerpts:
 
@@ -159,53 +260,62 @@ Recommended actions:
 - Resolve privacy and reminder expectations before sprint start.
 ```
 
-## Included In Core v1
+## Included In The Current Scope
 
-- Product idea intake
-- Product definition artifacts
-- Architecture planning guidance
-- Sprint planning artifacts
+- Product Definition
+- Architecture Planning
+- Sprint Planning
 - Engineering Confidence Score
 - Markdown report generation
+- Structured SprintPlan JSON generation
 - CLI-first local execution
-- Provider-agnostic LLM abstraction
-- Gemini provider support
+- Provider-agnostic LLM architecture
+- Gemini integration
 - Human-reviewable assumptions, risks, missing information and recommendations
+- Taiga backlog export for epics, user stories and tasks
+- Dry-run export
+- Live export
+- Profile-based Taiga configuration
+- Conservative duplicate avoidance where SprintPilot can match backlog items safely
 
-## Out Of Scope For Core v1
+## Out Of Scope
 
-- GitHub or Taiga integration
+- Sprint assignment, milestone assignment, velocity planning and capacity planning
+- Multi-sprint scheduling or splitting stories across scheduled containers
+- GitHub integration before the dedicated v4.0 scope
 - Code generation, scaffolding or autonomous coding
 - Repository management
 - CI/CD and deployment automation
 - Cloud collaboration or multi-user workspaces
 - Analytics modules beyond report-level planning context
-- Review agents
+- Review agents before the dedicated v5.0 scope
 - RAG systems
 - Project management replacement workflows
 
 ## Future Roadmap
 
-The next roadmap version is expected to build on Core v1 with integration-ready extension points while preserving the same product boundaries: SprintPilot assists engineering planning and decision-making before implementation begins.
+SprintPilot now follows a versioned roadmap that separates completed planning work from future delivery surfaces:
 
-Likely future directions:
-
-- **Core v1.1**: Stronger sample artifacts, packaging polish and CLI usability refinements.
-- **v2 planning**: Optional integrations such as Taiga or GitHub once they are explicitly specified.
-- **Later modules**: Review agents, analytics, cloud collaboration and code scaffolding only after dedicated specifications define their scope and approval gates.
+- ✅ v1.0 - Core Planning Engine
+- ✅ v2.0 - Taiga Backlog Export
+- 🚧 v2.1 - Planning Quality Improvements
+- 🚧 v3.0 - Frontend Dashboard
+- 🚧 v4.0 - GitHub Integration
+- 🚧 v5.0 - Multi-Agent Review System
 
 ## Repository Layout
 
 ```text
 src/sprintpilot/
   agents/       Agent prompts, adapters and orchestration boundaries
-  domain/       Pydantic models for Core v1 artifacts
+  domain/       Pydantic models for planning artifacts
+  integrations/ External integration boundaries, including Taiga backlog export
   llm/          Provider-neutral contracts and provider implementations
-  reporting/    Markdown report assembly and writing
+  reporting/    Markdown report assembly and SprintPlan artifact writing
   scoring/      Engineering Confidence Score factors and engine
   validation/   Scope, Agile and artifact validation helpers
-  workflow/     Core v1 stage orchestration
+  workflow/     Core Planning Engine stage orchestration
   cli.py        Local CLI entrypoint
 ```
 
-SprintPilot Core v1 keeps business logic independent from provider SDKs and future integrations, making the project easier to test, review and extend.
+SprintPilot keeps business logic independent from provider SDKs and external integrations, making the project easier to test, review and extend.

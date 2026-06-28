@@ -234,6 +234,28 @@ def write_markdown_report(report: SprintPilotReport, output: str | Path | None =
     return report_path
 
 
+def sprint_plan_artifact_path(report_path: str | Path) -> Path:
+    """Return the structured SprintPlan artifact path for a Markdown report path."""
+
+    path = Path(report_path)
+    return path.with_name(f"{path.stem}.sprint-plan.json")
+
+
+def write_sprint_plan_artifact(sprint_plan: SprintPlan, report_path: str | Path) -> Path:
+    """Write a Taiga-compatible structured SprintPlan JSON artifact next to a report."""
+
+    artifact_path = sprint_plan_artifact_path(report_path)
+    try:
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text(
+            sprint_plan.model_dump_json(indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        raise ReportWriteError(f"Unable to write SprintPlan artifact to {artifact_path}") from exc
+    return artifact_path
+
+
 def _bullets(items) -> list[str]:
     values = [str(item) for item in items if str(item).strip()]
     if not values:

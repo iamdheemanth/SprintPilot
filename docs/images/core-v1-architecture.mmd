@@ -1,28 +1,15 @@
 flowchart TD
-    CLI["CLI<br/>sprintpilot plan"] --> Workflow["Workflow Orchestration<br/>Core v1 stage runner"]
-
-    Workflow --> Product["Product Definition Stage"]
-    Workflow --> Architecture["Architecture Planning Stage"]
-    Workflow --> Sprint["Sprint Planning Stage"]
-    Workflow --> Confidence["Engineering Confidence Stage"]
-    Workflow --> Report["Report Assembly Stage"]
-
-    Product --> Agents["Agent Adapters<br/>Product Manager, Architect, Scrum Master"]
-    Architecture --> Agents
-    Sprint --> Agents
-
-    Agents --> LLM["LLM Provider Abstraction<br/>LLMProvider, LLMRequest, LLMResponse"]
+    CLI["CLI<br/>sprintpilot"] --> Workflow["Workflow Orchestration<br/>Planning stage runner"]
+    Workflow --> Domain["Domain Models<br/>Product, architecture, sprint, report"]
+    Workflow --> Agents["Agent Adapters<br/>Product Manager, Architect, Scrum Master"]
+    Agents --> LLM["LLM Provider Abstraction<br/>LLMProvider, request/response contracts"]
     LLM --> Gemini["Gemini Provider"]
     LLM --> OpenRouter["OpenRouter Provider"]
-
-    Product --> Domain["Domain Models<br/>Product, architecture, sprint, confidence, report"]
-    Architecture --> Domain
-    Sprint --> Domain
-
-    Domain --> Confidence
-    Confidence --> Scoring["Scoring Engine<br/>Factors, weights, caps, recommendations"]
-    Scoring --> Report
-    Domain --> Report
-
-    Report --> Markdown["Markdown Report Generation"]
-    Markdown --> Output["Output Report<br/>Local .md file"]
+    Workflow --> Scoring["Scoring Engine<br/>Engineering Confidence Score"]
+    Domain --> Scoring
+    Workflow --> Reporting["Report Generation<br/>Markdown assembler"]
+    Scoring --> Reporting
+    Reporting --> Report["Markdown Report<br/>Human review artifact"]
+    Reporting --> SprintJSON["SprintPlan JSON<br/>Structured integration artifact"]
+    SprintJSON --> Taiga["Taiga Integration Layer<br/>Mapper, client, auth, sync"]
+    Taiga --> Backlog["Taiga Backlog<br/>Epics, user stories, tasks"]

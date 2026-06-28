@@ -15,12 +15,58 @@ def build_product_manager_messages(product_idea: ProductIdea) -> list[Message]:
         "You are the SprintPilot Product Manager Agent. Generate only SprintPilot Core v1 "
         "product definition artifacts: product summary, functional requirements, "
         "non-functional requirements, user stories, acceptance criteria, assumptions, "
-        "missing information and reasoning. Do not generate source code, architecture "
-        "plans, sprint plans, confidence scores, GitHub or Taiga integration, analytics, "
-        "cloud collaboration, review agents, RAG, deployment, CI/CD or multi-user "
-        "collaboration. Return structured data matching the ProductDefinition contract."
+        "missing information and reasoning. Core v1 product definitions are a "
+        "single-student product for one individual student user using their own local "
+        "planning and tracking workflow. "
+        "Multiple students may be described as the target audience only as separate end "
+        "users, not collaboration between users. Do not generate source code, "
+        "architecture plans, sprint plans, confidence scores, GitHub or Taiga "
+        "integration, analytics modules, cloud collaboration, review agents, RAG, "
+        "deployment, CI/CD or multi-user collaboration. Explicitly exclude shared "
+        "workspaces, team accounts, commenting, co-editing, sharing workflows, advisor "
+        "or group collaboration, and role-based teamwork features. Application analytics "
+        "are allowed only when they mean the student's own application tracking insights: "
+        "personal insights for the individual student's own applications, such as total "
+        "applications, applications by status, interview/offer counts, and an upcoming "
+        "deadline summary. Explicitly exclude "
+        "analytics as a standalone module, platform, dashboard, or reporting system. "
+        "Return structured data matching the ProductDefinition contract."
     )
     user_prompt = f"Product idea:\n{product_idea.raw_text}"
+    return [
+        Message(role="system", content=system_prompt),
+        Message(role="user", content=user_prompt),
+    ]
+
+
+def build_product_manager_repair_messages(
+    *,
+    product_definition: ProductDefinition,
+    validation_errors: list[str],
+) -> list[Message]:
+    """Build a corrective ProductDefinition prompt after scope validation rejects output."""
+
+    system_prompt = (
+        "You are the SprintPilot Product Manager Repair Agent. Repair the generated "
+        "ProductDefinition for SprintPilot Core v1. This is a maximum one repair pass. "
+        "Remove collaboration features, shared workspaces, team accounts, advisor or "
+        "team collaboration, co-editing, sharing workflows, and role-based teamwork. "
+        "Convert collaboration-oriented requirements into single-user equivalents when "
+        "possible. Preserve requirements, user stories, acceptance criteria, assumptions, "
+        "missing information, reasoning, and personal application analytics. Preserve "
+        "personal application analytics only as the individual student's own summary "
+        "metrics, such as total applications, applications by status, interview/offer "
+        "counts, and upcoming deadline summary. Do not create analytics modules, "
+        "analytics dashboards, analytics platforms, reporting systems, architecture, "
+        "sprint plans, confidence scores, integrations, or code. Return structured data "
+        "matching the ProductDefinition contract."
+    )
+    user_prompt = (
+        "The previous ProductDefinition was rejected for Core v1 scope violations:\n"
+        f"{'; '.join(validation_errors)}\n\n"
+        "Repair this ProductDefinition JSON while preserving valid planning content:\n"
+        f"{product_definition.model_dump_json(indent=2)}"
+    )
     return [
         Message(role="system", content=system_prompt),
         Message(role="user", content=user_prompt),

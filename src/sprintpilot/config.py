@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from sprintpilot.integrations.taiga.models import TaigaSettings
 from sprintpilot.llm import LLMProviderConfig
 
 _OPENROUTER_DEFAULT_MODEL = "openai/gpt-oss-20b:free"
@@ -23,6 +24,7 @@ class RuntimeSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     llm: LLMProviderConfig
+    taiga: TaigaSettings | None = None
 
     @classmethod
     def from_env(cls) -> "RuntimeSettings":
@@ -82,6 +84,7 @@ class RuntimeSettings(BaseModel):
             )
 
         try:
+            taiga_settings = TaigaSettings.from_env({**dotenv_values, **os.environ})
             return cls(
                 llm=LLMProviderConfig(
                     provider_name=provider_name,
@@ -96,7 +99,8 @@ class RuntimeSettings(BaseModel):
                         setting_name="SPRINTPILOT_MODEL_MAX_RETRIES",
                     ),
                     environment_keys=environment_keys,
-                )
+                ),
+                taiga=taiga_settings,
             )
         except ValidationError as exc:
             raise ValueError("Invalid SprintPilot runtime LLM configuration") from exc
@@ -182,4 +186,12 @@ _RUNTIME_ONLY_DOTENV_KEYS = {
     "SPRINTPILOT_PROVIDER_ENV_KEYS",
     "SPRINTPILOT_MODEL_MAX_RETRIES",
     "SPRINTPILOT_MODEL_TIMEOUT_SECONDS",
+    "SPRINTPILOT_TAIGA_BASE_URL",
+    "SPRINTPILOT_TAIGA_PROJECT",
+    "SPRINTPILOT_TAIGA_AUTH_MODE",
+    "SPRINTPILOT_TAIGA_TOKEN_ENV_KEY",
+    "SPRINTPILOT_TAIGA_USERNAME_OR_EMAIL",
+    "SPRINTPILOT_TAIGA_TIMEOUT_SECONDS",
+    "SPRINTPILOT_TAIGA_MAX_RETRIES",
+    "SPRINTPILOT_TAIGA_DRY_RUN",
 }

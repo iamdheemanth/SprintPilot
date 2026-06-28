@@ -17,6 +17,7 @@ from sprintpilot.agents.crew import (
 from sprintpilot.agents.prompts import (
     build_architect_messages,
     build_product_manager_messages,
+    build_product_manager_repair_messages,
     build_scrum_master_messages,
 )
 
@@ -27,6 +28,7 @@ __all__ = [
     "ScrumMasterCrew",
     "build_architect_messages",
     "build_product_manager_messages",
+    "build_product_manager_repair_messages",
     "build_scrum_master_messages",
     "create_architect_crew",
     "create_product_manager_crew",

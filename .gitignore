@@ -8,6 +8,7 @@ __pycache__/
 # Python packaging
 build/
 dist/
+site/
 downloads/
 eggs/
 .eggs/
@@ -22,6 +23,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.python-version
 
 # Virtual environments
 .venv/
@@ -37,6 +39,7 @@ ENV/
 .pyre/
 .pytype/
 .ruff_cache/
+.cache/
 .tox/
 .nox/
 .coverage
@@ -59,21 +62,31 @@ pip-wheel-metadata/
 
 # Spec Kit / agent files
 .agents/
+AGENTS.md
+agents.md
+.codex/
 .specify/memory/
 .specify/.cache/
 
-# Environment variables
+# Environment variables and local secrets
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
 
 # IDE
 .vscode/
 .idea/
+*.code-workspace
 
 # Logs
 *.log
@@ -89,8 +102,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Local generated artifacts
+# SprintPilot local state and generated artifacts
+.sprintpilot/
 reports/
+*.sprint-plan.json
+taiga-profiles.json
 *.tmp
 *.bak
 *.swp
